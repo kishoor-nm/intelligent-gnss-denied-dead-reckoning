@@ -1,0 +1,39 @@
+# Python Bytecode & Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.venv/
+
+# IDE & Editor Metadata
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Large Sensor Datasets (DO NOT COMMIT RAW OR PROCESSED CSVs)
+data/
+data/processed/
+IO-VNBD-master/
+*.csv
+
+# Temporary Outputs & Logs
+scratch/
+results/
+results/realtime_replay/
+results/prototype_explorer/
+results/demo/
+*.log
+*.png
+
+# Antigravity IDE Internal Directories
+.system_generated/
