@@ -50,18 +50,30 @@ class EKFResultM5_1:
     outage_end_t: float
     outage_duration_sec: float
 
+def compute_dynamic_yaw_scale(raw_yaw: float, lat_accel: float, base_scale: float = 0.95, dynamic_enabled: bool = False) -> float:
+    """
+    Computes dynamic lateral-acceleration yaw-scale factor (V2.1 Candidate 1).
+    Formulation: k(a_y) = base_scale - 0.03 * min(1.0, abs(a_y) / 3.0)
+    If dynamic_enabled is False, returns raw_yaw * base_scale (V2.0 baseline behavior).
+    """
+    if not dynamic_enabled:
+        return raw_yaw * base_scale
+    k = base_scale - 0.03 * min(1.0, abs(lat_accel) / 3.0)
+    return raw_yaw * k
+
 def extract_outage_estimator_inputs(
     df_v: pd.DataFrame,
     t0: float,
     outage_duration_sec: float,
-    yaw_scale_factor: float = 0.95
+    yaw_scale_factor: float = 0.95,
+    dynamic_yaw_scale_enabled: bool = False
 ) -> List[OutageEstimatorInputs]:
     """
     Extracts strictly non-GNSS ECU sensor inputs for the estimator loop.
     Audited Provenance:
     - ecu_speed_m_s: Derived from CAN-bus 'Indicated Vehicle Speed (km/hr)'
     - longitudinal_accel_m_s2: Derived from CAN-bus 'Indicated Longitudinal Acceleration (g)'
-    - yaw_rate_rad_s: Derived from CAN-bus 'Yaw Rate (deg/sec)' scaled by yaw_scale_factor
+    - yaw_rate_rad_s: Derived from CAN-bus 'Yaw Rate (deg/sec)' scaled dynamically or statically
     """
     v_slice = df_v[(df_v["t_rel_sec"] >= t0 - 1e-5) & (df_v["t_rel_sec"] <= t0 + outage_duration_sec + 1e-5)].copy().reset_index(drop=True)
     inputs_list: List[OutageEstimatorInputs] = []
@@ -91,12 +103,21 @@ def extract_outage_estimator_inputs(
         else:
             a_long = float(v_slice["Indicated Longitudinal Acceleration (g)"].iloc[i]) * 9.80665
 
-        # Extract Yaw Rate (NON-GNSS CAN Bus, scaled by yaw_scale_factor)
+        # Extract Lateral Acceleration (NON-GNSS)
+        if "lateral_accel_m_s2" in v_slice.columns:
+            a_lat = float(v_slice["lateral_accel_m_s2"].iloc[i])
+        elif "Indicated Lateral Acceleration (g)" in v_slice.columns:
+            a_lat = float(v_slice["Indicated Lateral Acceleration (g)"].iloc[i]) * 9.80665
+        else:
+            a_lat = 0.0
+
+        # Extract Yaw Rate (NON-GNSS CAN Bus, scaled dynamically or statically)
         if "yaw_rate_rad_s" in v_slice.columns:
             raw_yaw = float(v_slice["yaw_rate_rad_s"].iloc[i])
         else:
             raw_yaw = float(v_slice["Yaw Rate (deg/sec)"].iloc[i]) * (np.pi / 180.0)
-        yaw_rate = raw_yaw * yaw_scale_factor
+
+        yaw_rate = compute_dynamic_yaw_scale(raw_yaw, a_lat, base_scale=yaw_scale_factor, dynamic_enabled=dynamic_yaw_scale_enabled)
 
         inputs_list.append(OutageEstimatorInputs(
             index=idx,
@@ -115,6 +136,7 @@ def propagate_ekf_m5_1(
     start_idx: int,
     outage_duration_sec: float,
     yaw_scale_factor: float = 0.95,
+    dynamic_yaw_scale_enabled: bool = False,
     q_var_pos: float = 1e-5,
     q_var_speed: float = 1e-3,
     q_var_yaw: float = 1e-4,
@@ -126,7 +148,11 @@ def propagate_ekf_m5_1(
     Executes 5D EKF state propagation using strictly non-GNSS ECU inputs.
     """
     t0 = initial_state.t_rel_sec
-    outage_inputs = extract_outage_estimator_inputs(df_v, t0, outage_duration_sec, yaw_scale_factor=yaw_scale_factor)
+    outage_inputs = extract_outage_estimator_inputs(
+        df_v, t0, outage_duration_sec, 
+        yaw_scale_factor=yaw_scale_factor, 
+        dynamic_yaw_scale_enabled=dynamic_yaw_scale_enabled
+    )
     n_samples = len(outage_inputs)
 
     x = np.array([initial_state.east_m, initial_state.north_m, initial_state.speed_m_s, initial_state.heading_rad, 0.0])

@@ -70,7 +70,8 @@ def extract_outage_inputs_m9(
     t0: float,
     outage_duration_sec: float,
     start_idx: int = 1000,
-    yaw_scale_factor: float = 0.95
+    yaw_scale_factor: float = 0.95,
+    dynamic_yaw_scale_enabled: bool = False
 ) -> List[OutageEstimatorInputsM9]:
     """
     Extracts strictly non-GNSS ECU vehicle sensors + smartphone IMU inputs.
@@ -78,7 +79,7 @@ def extract_outage_inputs_m9(
     - ecu_speed_m_s: Vehicle CAN ECU Indicated Speed (m/s)
     - longitudinal_accel_m_s2: Vehicle CAN ECU Longitudinal Accel (m/s^2)
     - lateral_accel_m_s2: Vehicle CAN ECU Lateral Accel (m/s^2)
-    - yaw_rate_rad_s: Vehicle CAN ECU Yaw Rate (rad/s) scaled by yaw_scale_factor
+    - yaw_rate_rad_s: Vehicle CAN ECU Yaw Rate (rad/s) scaled dynamically or statically
     - roll_rate_rad_s: Smartphone 'GYROSCOPE Roll (rad/s)'
     """
     v_slice = df_v[(df_v["t_rel_sec"] >= t0 - 1e-5) & (df_v["t_rel_sec"] <= t0 + outage_duration_sec + 1e-5)].copy().reset_index(drop=True)
@@ -111,7 +112,10 @@ def extract_outage_inputs_m9(
         a_long = float(v_slice["longitudinal_accel_m_s2"].iloc[i]) if "longitudinal_accel_m_s2" in v_slice.columns else float(v_slice["Indicated Longitudinal Acceleration (g)"].iloc[i]) * 9.80665
         a_lat = float(v_slice["lateral_accel_m_s2"].iloc[i]) if "lateral_accel_m_s2" in v_slice.columns else float(v_slice["Indicated Lateral Acceleration (g)"].iloc[i]) * 9.80665
         raw_yaw = float(v_slice["yaw_rate_rad_s"].iloc[i]) if "yaw_rate_rad_s" in v_slice.columns else float(v_slice["Yaw Rate (deg/sec)"].iloc[i]) * (np.pi / 180.0)
-        yaw_rate = raw_yaw * yaw_scale_factor
+
+        # Import dynamic scaling helper from ekf_m5_1
+        from src.iovnbd.navigation.ekf_m5_1 import compute_dynamic_yaw_scale
+        yaw_rate = compute_dynamic_yaw_scale(raw_yaw, a_lat, base_scale=yaw_scale_factor, dynamic_enabled=dynamic_yaw_scale_enabled)
         roll_rate = float(roll_series.iloc[i])
 
         inputs_list.append(OutageEstimatorInputsM9(
@@ -139,6 +143,7 @@ def propagate_ekf_m9(
     nhc_speed_threshold_m_s: float = 0.5,
     nhc_residual_threshold_m_s2: float = 3.0,
     yaw_scale_factor: float = 0.95,
+    dynamic_yaw_scale_enabled: bool = False,
     q_var_pos: float = 1e-5,
     q_var_speed: float = 1e-3,
     q_var_yaw: float = 1e-4,
@@ -158,6 +163,7 @@ def propagate_ekf_m9(
         enable_nhc=enable_nhc, nhc_speed_threshold_m_s=nhc_speed_threshold_m_s,
         nhc_residual_threshold_m_s2=nhc_residual_threshold_m_s2,
         yaw_scale_factor=yaw_scale_factor,
+        dynamic_yaw_scale_enabled=dynamic_yaw_scale_enabled,
         q_var_pos=q_var_pos, q_var_speed=q_var_speed, q_var_yaw=q_var_yaw,
         q_var_roll=q_var_roll, q_var_bias=q_var_bias, r_var_ecu_speed=r_var_ecu_speed,
         r_var_nhc=r_var_nhc, r_var_zupt=r_var_zupt, g_accel=g_accel
@@ -221,13 +227,6 @@ class EKFResultM9_1:
     v0: float
 
 def compute_speed_adaptive_k_roll(v_m_s: float, k_base: float = 0.05, v0_m_s: float = 5.0) -> float:
-    """
-    Computes speed-adaptive roll restoring stiffness:
-    K_roll(V) = K_base * (1 - exp(-V / V0))
-    - At V = 0: K_roll = 0 (Unconstrained stationary/low-speed roll dynamics)
-    - At high V (V >> V0): K_roll -> K_base (Restrains high-speed roll integration drift)
-    Monotonic, bounded in [0, K_base].
-    """
     v_pos = max(0.0, float(v_m_s))
     if v0_m_s <= 0.0:
         return float(k_base)
@@ -249,6 +248,7 @@ def propagate_ekf_m9_1(
     nhc_speed_threshold_m_s: float = 0.5,
     nhc_residual_threshold_m_s2: float = 3.0,
     yaw_scale_factor: float = 0.95,
+    dynamic_yaw_scale_enabled: bool = False,
     q_var_pos: float = 1e-5,
     q_var_speed: float = 1e-3,
     q_var_yaw: float = 1e-4,
@@ -263,7 +263,11 @@ def propagate_ekf_m9_1(
     Executes Module 9.1 6D Full-Orientation EKF state propagation with Speed-Adaptive Roll Compensation.
     """
     t0 = initial_state.t_rel_sec
-    outage_inputs = extract_outage_inputs_m9(df_v, df_s, t0, outage_duration_sec, start_idx, yaw_scale_factor=yaw_scale_factor)
+    outage_inputs = extract_outage_inputs_m9(
+        df_v, df_s, t0, outage_duration_sec, start_idx,
+        yaw_scale_factor=yaw_scale_factor,
+        dynamic_yaw_scale_enabled=dynamic_yaw_scale_enabled
+    )
     n_samples = len(outage_inputs)
 
     x = np.array([initial_state.east_m, initial_state.north_m, initial_state.speed_m_s, initial_state.heading_rad, initial_roll_rad, 0.0])

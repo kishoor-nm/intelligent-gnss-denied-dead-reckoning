@@ -11,6 +11,7 @@ import pandas as pd
 
 from src.iovnbd.preprocessing.schema_validation import SingleSensorSample
 from src.iovnbd.navigation.initialization import InitialState
+from src.iovnbd.navigation.ekf_m5_1 import compute_dynamic_yaw_scale
 from src.iovnbd.navigation.coordinate_frame import geodetic_to_enu, enu_to_geodetic
 from src.iovnbd.navigation.fusion_m9_3 import FusedStatePointM9_3, FusedResultM9_3
 from src.iovnbd.navigation.ekf_m9 import compute_speed_adaptive_k_roll
@@ -53,7 +54,8 @@ class StreamingNavigationRunner:
         t_switch_sec: float = 30.0,
         k_base: float = 0.02,
         v0_m_s: float = 10.0,
-        yaw_scale_factor: float = 0.95
+        yaw_scale_factor: float = 0.95,
+        dynamic_yaw_scale_enabled: bool = False
     ):
         self.init_state = initial_state
         self.mode = mode
@@ -61,6 +63,7 @@ class StreamingNavigationRunner:
         self.k_base = k_base
         self.v0_m_s = v0_m_s
         self.yaw_scale_factor = yaw_scale_factor
+        self.dynamic_yaw_scale_enabled = dynamic_yaw_scale_enabled
         self.origin = initial_state.origin
 
         # Initialize M5.1 5D EKF state: [E, N, V, psi, bz]
@@ -162,7 +165,10 @@ class StreamingNavigationRunner:
                 # Propagate M5.1
                 E, N, V, psi, b_z = st.x_m5_1
                 a_long = sample.longitudinal_accel_m_s2
-                omega_raw = sample.yaw_rate_rad_s * self.yaw_scale_factor
+                omega_raw = compute_dynamic_yaw_scale(
+                    sample.yaw_rate_rad_s, sample.lateral_accel_m_s2,
+                    base_scale=self.yaw_scale_factor, dynamic_enabled=self.dynamic_yaw_scale_enabled
+                )
 
                 E_pred = E + V * np.sin(psi) * dt
                 N_pred = N + V * np.cos(psi) * dt
@@ -201,7 +207,10 @@ class StreamingNavigationRunner:
                 k_roll_curr = compute_speed_adaptive_k_roll(st.x_m9_1[2], k_base=self.k_base, v0_m_s=self.v0_m_s)
                 E, N, V, psi, phi, b_z = st.x_m9_1
                 a_long = sample.longitudinal_accel_m_s2
-                omega_raw = sample.yaw_rate_rad_s * self.yaw_scale_factor
+                omega_raw = compute_dynamic_yaw_scale(
+                    sample.yaw_rate_rad_s, sample.lateral_accel_m_s2,
+                    base_scale=self.yaw_scale_factor, dynamic_enabled=self.dynamic_yaw_scale_enabled
+                )
                 omega_roll = sample.roll_rate_rad_s
 
                 E_pred = E + V * np.sin(psi) * dt
