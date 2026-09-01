@@ -20,8 +20,8 @@ class FinalDeadReckoningConfig:
     v0_m_s: float = 10.0
     fixed_switch_threshold_sec: float = 30.0
     fusion_mode: str = "adaptive_switch"  # 'adaptive_switch', 'fixed_switch', 'm5_1_only', 'm9_1_only'
-    yaw_scale_factor: float = 0.95  # Default yaw scale factor (1.0 = V1 baseline)
-    dynamic_yaw_scale_enabled: bool = False  # Set True for V2.1 Candidate 1 dynamic lateral accel scaling
+    yaw_scale_factor: float = 0.90  # Validated V2.1 base yaw scale factor (1.0 = V1 baseline)
+    dynamic_yaw_scale_enabled: bool = True  # V2.1 production dynamic lateral accel scaling
 
 class FinalNavigationSystem:
     """

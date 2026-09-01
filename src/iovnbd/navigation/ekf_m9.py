@@ -70,8 +70,8 @@ def extract_outage_inputs_m9(
     t0: float,
     outage_duration_sec: float,
     start_idx: int = 1000,
-    yaw_scale_factor: float = 0.95,
-    dynamic_yaw_scale_enabled: bool = False
+    yaw_scale_factor: float = 0.90,
+    dynamic_yaw_scale_enabled: bool = True
 ) -> List[OutageEstimatorInputsM9]:
     """
     Extracts strictly non-GNSS ECU vehicle sensors + smartphone IMU inputs.
@@ -142,8 +142,8 @@ def propagate_ekf_m9(
     enable_nhc: bool = True,
     nhc_speed_threshold_m_s: float = 0.5,
     nhc_residual_threshold_m_s2: float = 3.0,
-    yaw_scale_factor: float = 0.95,
-    dynamic_yaw_scale_enabled: bool = False,
+    yaw_scale_factor: float = 0.90,
+    dynamic_yaw_scale_enabled: bool = True,
     q_var_pos: float = 1e-5,
     q_var_speed: float = 1e-3,
     q_var_yaw: float = 1e-4,
@@ -247,8 +247,8 @@ def propagate_ekf_m9_1(
     enable_nhc: bool = True,
     nhc_speed_threshold_m_s: float = 0.5,
     nhc_residual_threshold_m_s2: float = 3.0,
-    yaw_scale_factor: float = 0.95,
-    dynamic_yaw_scale_enabled: bool = False,
+    yaw_scale_factor: float = 0.90,
+    dynamic_yaw_scale_enabled: bool = True,
     q_var_pos: float = 1e-5,
     q_var_speed: float = 1e-3,
     q_var_yaw: float = 1e-4,

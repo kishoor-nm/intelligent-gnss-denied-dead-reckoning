@@ -54,14 +54,14 @@ class TestV21DynamicYawScale(unittest.TestCase):
         self.assertAlmostEqual(metrics_v2.final_position_error_m, 31.21, delta=0.5)
 
     def test_v2_1_dynamic_performance_gain(self):
-        """Verify V2.1 Candidate 1 (dynamic_yaw_scale_enabled=True) achieves ~6.59m 30s RMSE."""
-        cfg_v21 = FinalDeadReckoningConfig(yaw_scale_factor=0.95, dynamic_yaw_scale_enabled=True)
+        """Verify V2.1 Production (yaw_scale_factor=0.90, dynamic_yaw_scale_enabled=True) achieves 6.16m 30s RMSE and 10.59m final error."""
+        cfg_v21 = FinalDeadReckoningConfig(yaw_scale_factor=0.90, dynamic_yaw_scale_enabled=True)
         sys_v21 = FinalNavigationSystem(cfg_v21)
         res_v21 = sys_v21.run_outage_navigation(self.df_v, self.df_s, start_idx=1000, outage_duration_sec=30.0)
         metrics_v21 = sys_v21.evaluate_outage_performance(res_v21, self.df_v)
 
-        self.assertLess(metrics_v21.rmse_position_error_m, 14.0)
-        self.assertLess(metrics_v21.final_position_error_m, 28.0)
+        self.assertAlmostEqual(metrics_v21.rmse_position_error_m, 6.16, delta=0.5)
+        self.assertAlmostEqual(metrics_v21.final_position_error_m, 10.59, delta=0.5)
 
     def test_zero_gnss_leakage_in_v2_1(self):
         """Verify corrupting outage GNSS coordinates leaves V2.1 estimator output identical."""

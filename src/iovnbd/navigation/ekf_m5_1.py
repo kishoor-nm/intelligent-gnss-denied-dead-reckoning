@@ -50,7 +50,7 @@ class EKFResultM5_1:
     outage_end_t: float
     outage_duration_sec: float
 
-def compute_dynamic_yaw_scale(raw_yaw: float, lat_accel: float, base_scale: float = 0.95, dynamic_enabled: bool = False) -> float:
+def compute_dynamic_yaw_scale(raw_yaw: float, lat_accel: float, base_scale: float = 0.90, dynamic_enabled: bool = True) -> float:
     """
     Computes dynamic lateral-acceleration yaw-scale factor (V2.1 Candidate 1).
     Formulation: k(a_y) = base_scale - 0.03 * min(1.0, abs(a_y) / 3.0)
@@ -65,8 +65,8 @@ def extract_outage_estimator_inputs(
     df_v: pd.DataFrame,
     t0: float,
     outage_duration_sec: float,
-    yaw_scale_factor: float = 0.95,
-    dynamic_yaw_scale_enabled: bool = False
+    yaw_scale_factor: float = 0.90,
+    dynamic_yaw_scale_enabled: bool = True
 ) -> List[OutageEstimatorInputs]:
     """
     Extracts strictly non-GNSS ECU sensor inputs for the estimator loop.
@@ -135,8 +135,8 @@ def propagate_ekf_m5_1(
     initial_state: InitialState,
     start_idx: int,
     outage_duration_sec: float,
-    yaw_scale_factor: float = 0.95,
-    dynamic_yaw_scale_enabled: bool = False,
+    yaw_scale_factor: float = 0.90,
+    dynamic_yaw_scale_enabled: bool = True,
     q_var_pos: float = 1e-5,
     q_var_speed: float = 1e-3,
     q_var_yaw: float = 1e-4,

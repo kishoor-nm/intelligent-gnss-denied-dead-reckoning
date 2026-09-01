@@ -54,8 +54,8 @@ class StreamingNavigationRunner:
         t_switch_sec: float = 30.0,
         k_base: float = 0.02,
         v0_m_s: float = 10.0,
-        yaw_scale_factor: float = 0.95,
-        dynamic_yaw_scale_enabled: bool = False
+        yaw_scale_factor: float = 0.90,
+        dynamic_yaw_scale_enabled: bool = True
     ):
         self.init_state = initial_state
         self.mode = mode

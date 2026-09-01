@@ -115,11 +115,11 @@ def run_realtime_replay_cli(
         dynamic_yaw_scale_enabled=False
     )
 
-    # V2.1 Production Runner (yaw_scale_factor = 0.95, dynamic_yaw_scale_enabled = True)
+    # V2.1 Production Runner (yaw_scale_factor = 0.90, dynamic_yaw_scale_enabled = True)
     runner_v2_1 = StreamingNavigationRunner(
         initial_state=init_state,
         mode="adaptive_switch",
-        yaw_scale_factor=0.95,
+        yaw_scale_factor=0.90,
         dynamic_yaw_scale_enabled=True
     )
 
