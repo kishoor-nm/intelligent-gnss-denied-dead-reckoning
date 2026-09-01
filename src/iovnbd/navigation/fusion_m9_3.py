@@ -76,6 +76,7 @@ def propagate_fused_ekf_m9_3(
     v0_m_s: float = 10.0,
     heading_std_threshold_deg: float = 8.0,
     yaw_rate_cum_threshold_rad: float = 0.5,
+    yaw_scale_factor: float = 0.95,
     q_var_pos: float = 1e-5,
     q_var_speed: float = 1e-3,
     q_var_yaw: float = 1e-4,
@@ -90,7 +91,7 @@ def propagate_fused_ekf_m9_3(
     Executes Module 9.3 Adaptive Fusion & Switching EKF with State Handoff Continuity.
     """
     t0 = initial_state.t_rel_sec
-    outage_inputs = extract_outage_inputs_m9(df_v, df_s, t0, outage_duration_sec, start_idx)
+    outage_inputs = extract_outage_inputs_m9(df_v, df_s, t0, outage_duration_sec, start_idx, yaw_scale_factor=yaw_scale_factor)
     n_samples = len(outage_inputs)
 
     # Initialize M5.1 (5D) and M9.1 (6D) states

@@ -52,13 +52,15 @@ class StreamingNavigationRunner:
         mode: str = "adaptive_switch",
         t_switch_sec: float = 30.0,
         k_base: float = 0.02,
-        v0_m_s: float = 10.0
+        v0_m_s: float = 10.0,
+        yaw_scale_factor: float = 0.95
     ):
         self.init_state = initial_state
         self.mode = mode
         self.t_switch_sec = t_switch_sec
         self.k_base = k_base
         self.v0_m_s = v0_m_s
+        self.yaw_scale_factor = yaw_scale_factor
         self.origin = initial_state.origin
 
         # Initialize M5.1 5D EKF state: [E, N, V, psi, bz]
@@ -160,7 +162,7 @@ class StreamingNavigationRunner:
                 # Propagate M5.1
                 E, N, V, psi, b_z = st.x_m5_1
                 a_long = sample.longitudinal_accel_m_s2
-                omega_raw = sample.yaw_rate_rad_s
+                omega_raw = sample.yaw_rate_rad_s * self.yaw_scale_factor
 
                 E_pred = E + V * np.sin(psi) * dt
                 N_pred = N + V * np.cos(psi) * dt
@@ -199,7 +201,7 @@ class StreamingNavigationRunner:
                 k_roll_curr = compute_speed_adaptive_k_roll(st.x_m9_1[2], k_base=self.k_base, v0_m_s=self.v0_m_s)
                 E, N, V, psi, phi, b_z = st.x_m9_1
                 a_long = sample.longitudinal_accel_m_s2
-                omega_raw = sample.yaw_rate_rad_s
+                omega_raw = sample.yaw_rate_rad_s * self.yaw_scale_factor
                 omega_roll = sample.roll_rate_rad_s
 
                 E_pred = E + V * np.sin(psi) * dt

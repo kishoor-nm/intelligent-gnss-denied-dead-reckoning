@@ -64,14 +64,21 @@ class EKFResultM9:
     nhc_rejected_speed_count: int
     nhc_rejected_residual_count: int
 
-def extract_outage_inputs_m9(df_v: pd.DataFrame, df_s: pd.DataFrame, t0: float, outage_duration_sec: float, start_idx: int) -> List[OutageEstimatorInputsM9]:
+def extract_outage_inputs_m9(
+    df_v: pd.DataFrame,
+    df_s: pd.DataFrame,
+    t0: float,
+    outage_duration_sec: float,
+    start_idx: int = 1000,
+    yaw_scale_factor: float = 0.95
+) -> List[OutageEstimatorInputsM9]:
     """
-    Extracts strictly non-GNSS ECU and Smartphone IMU inputs for Module 9.
+    Extracts strictly non-GNSS ECU vehicle sensors + smartphone IMU inputs.
     Audited Provenance:
-    - ecu_speed_m_s: CAN 'Indicated Vehicle Speed (km/hr)' / 3.6
-    - longitudinal_accel_m_s2: CAN 'Indicated Longitudinal Acceleration (g)' * 9.80665
-    - lateral_accel_m_s2: CAN 'Indicated Lateral Acceleration (g)' * 9.80665
-    - yaw_rate_rad_s: CAN 'Yaw Rate (deg/sec)' * (pi / 180.0)
+    - ecu_speed_m_s: Vehicle CAN ECU Indicated Speed (m/s)
+    - longitudinal_accel_m_s2: Vehicle CAN ECU Longitudinal Accel (m/s^2)
+    - lateral_accel_m_s2: Vehicle CAN ECU Lateral Accel (m/s^2)
+    - yaw_rate_rad_s: Vehicle CAN ECU Yaw Rate (rad/s) scaled by yaw_scale_factor
     - roll_rate_rad_s: Smartphone 'GYROSCOPE Roll (rad/s)'
     """
     v_slice = df_v[(df_v["t_rel_sec"] >= t0 - 1e-5) & (df_v["t_rel_sec"] <= t0 + outage_duration_sec + 1e-5)].copy().reset_index(drop=True)
@@ -103,7 +110,8 @@ def extract_outage_inputs_m9(df_v: pd.DataFrame, df_s: pd.DataFrame, t0: float, 
         ecu_speed = float(v_slice["indicated_speed_m_s"].iloc[i]) if "indicated_speed_m_s" in v_slice.columns else float(v_slice["Indicated Vehicle Speed (km/hr)"].iloc[i]) / 3.6
         a_long = float(v_slice["longitudinal_accel_m_s2"].iloc[i]) if "longitudinal_accel_m_s2" in v_slice.columns else float(v_slice["Indicated Longitudinal Acceleration (g)"].iloc[i]) * 9.80665
         a_lat = float(v_slice["lateral_accel_m_s2"].iloc[i]) if "lateral_accel_m_s2" in v_slice.columns else float(v_slice["Indicated Lateral Acceleration (g)"].iloc[i]) * 9.80665
-        yaw_rate = float(v_slice["yaw_rate_rad_s"].iloc[i]) if "yaw_rate_rad_s" in v_slice.columns else float(v_slice["Yaw Rate (deg/sec)"].iloc[i]) * (np.pi / 180.0)
+        raw_yaw = float(v_slice["yaw_rate_rad_s"].iloc[i]) if "yaw_rate_rad_s" in v_slice.columns else float(v_slice["Yaw Rate (deg/sec)"].iloc[i]) * (np.pi / 180.0)
+        yaw_rate = raw_yaw * yaw_scale_factor
         roll_rate = float(roll_series.iloc[i])
 
         inputs_list.append(OutageEstimatorInputsM9(
@@ -130,6 +138,7 @@ def propagate_ekf_m9(
     enable_nhc: bool = True,
     nhc_speed_threshold_m_s: float = 0.5,
     nhc_residual_threshold_m_s2: float = 3.0,
+    yaw_scale_factor: float = 0.95,
     q_var_pos: float = 1e-5,
     q_var_speed: float = 1e-3,
     q_var_yaw: float = 1e-4,
@@ -148,6 +157,7 @@ def propagate_ekf_m9(
         k_mode="fixed", fixed_k_roll=k_roll_restore, initial_roll_rad=initial_roll_rad,
         enable_nhc=enable_nhc, nhc_speed_threshold_m_s=nhc_speed_threshold_m_s,
         nhc_residual_threshold_m_s2=nhc_residual_threshold_m_s2,
+        yaw_scale_factor=yaw_scale_factor,
         q_var_pos=q_var_pos, q_var_speed=q_var_speed, q_var_yaw=q_var_yaw,
         q_var_roll=q_var_roll, q_var_bias=q_var_bias, r_var_ecu_speed=r_var_ecu_speed,
         r_var_nhc=r_var_nhc, r_var_zupt=r_var_zupt, g_accel=g_accel
@@ -238,6 +248,7 @@ def propagate_ekf_m9_1(
     enable_nhc: bool = True,
     nhc_speed_threshold_m_s: float = 0.5,
     nhc_residual_threshold_m_s2: float = 3.0,
+    yaw_scale_factor: float = 0.95,
     q_var_pos: float = 1e-5,
     q_var_speed: float = 1e-3,
     q_var_yaw: float = 1e-4,
@@ -252,7 +263,7 @@ def propagate_ekf_m9_1(
     Executes Module 9.1 6D Full-Orientation EKF state propagation with Speed-Adaptive Roll Compensation.
     """
     t0 = initial_state.t_rel_sec
-    outage_inputs = extract_outage_inputs_m9(df_v, df_s, t0, outage_duration_sec, start_idx)
+    outage_inputs = extract_outage_inputs_m9(df_v, df_s, t0, outage_duration_sec, start_idx, yaw_scale_factor=yaw_scale_factor)
     n_samples = len(outage_inputs)
 
     x = np.array([initial_state.east_m, initial_state.north_m, initial_state.speed_m_s, initial_state.heading_rad, initial_roll_rad, 0.0])

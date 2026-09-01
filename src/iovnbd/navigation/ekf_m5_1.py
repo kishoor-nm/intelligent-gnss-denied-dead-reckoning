@@ -50,13 +50,18 @@ class EKFResultM5_1:
     outage_end_t: float
     outage_duration_sec: float
 
-def extract_outage_estimator_inputs(df_v: pd.DataFrame, t0: float, outage_duration_sec: float) -> List[OutageEstimatorInputs]:
+def extract_outage_estimator_inputs(
+    df_v: pd.DataFrame,
+    t0: float,
+    outage_duration_sec: float,
+    yaw_scale_factor: float = 0.95
+) -> List[OutageEstimatorInputs]:
     """
     Extracts strictly non-GNSS ECU sensor inputs for the estimator loop.
     Audited Provenance:
     - ecu_speed_m_s: Derived from CAN-bus 'Indicated Vehicle Speed (km/hr)'
     - longitudinal_accel_m_s2: Derived from CAN-bus 'Indicated Longitudinal Acceleration (g)'
-    - yaw_rate_rad_s: Derived from CAN-bus 'Yaw Rate (deg/sec)'
+    - yaw_rate_rad_s: Derived from CAN-bus 'Yaw Rate (deg/sec)' scaled by yaw_scale_factor
     """
     v_slice = df_v[(df_v["t_rel_sec"] >= t0 - 1e-5) & (df_v["t_rel_sec"] <= t0 + outage_duration_sec + 1e-5)].copy().reset_index(drop=True)
     inputs_list: List[OutageEstimatorInputs] = []
@@ -86,11 +91,12 @@ def extract_outage_estimator_inputs(df_v: pd.DataFrame, t0: float, outage_durati
         else:
             a_long = float(v_slice["Indicated Longitudinal Acceleration (g)"].iloc[i]) * 9.80665
 
-        # Extract Yaw Rate (NON-GNSS CAN Bus)
+        # Extract Yaw Rate (NON-GNSS CAN Bus, scaled by yaw_scale_factor)
         if "yaw_rate_rad_s" in v_slice.columns:
-            yaw_rate = float(v_slice["yaw_rate_rad_s"].iloc[i])
+            raw_yaw = float(v_slice["yaw_rate_rad_s"].iloc[i])
         else:
-            yaw_rate = float(v_slice["Yaw Rate (deg/sec)"].iloc[i]) * (np.pi / 180.0)
+            raw_yaw = float(v_slice["Yaw Rate (deg/sec)"].iloc[i]) * (np.pi / 180.0)
+        yaw_rate = raw_yaw * yaw_scale_factor
 
         inputs_list.append(OutageEstimatorInputs(
             index=idx,
@@ -108,6 +114,7 @@ def propagate_ekf_m5_1(
     initial_state: InitialState,
     start_idx: int,
     outage_duration_sec: float,
+    yaw_scale_factor: float = 0.95,
     q_var_pos: float = 1e-5,
     q_var_speed: float = 1e-3,
     q_var_yaw: float = 1e-4,
@@ -119,7 +126,7 @@ def propagate_ekf_m5_1(
     Executes 5D EKF state propagation using strictly non-GNSS ECU inputs.
     """
     t0 = initial_state.t_rel_sec
-    outage_inputs = extract_outage_estimator_inputs(df_v, t0, outage_duration_sec)
+    outage_inputs = extract_outage_estimator_inputs(df_v, t0, outage_duration_sec, yaw_scale_factor=yaw_scale_factor)
     n_samples = len(outage_inputs)
 
     x = np.array([initial_state.east_m, initial_state.north_m, initial_state.speed_m_s, initial_state.heading_rad, 0.0])

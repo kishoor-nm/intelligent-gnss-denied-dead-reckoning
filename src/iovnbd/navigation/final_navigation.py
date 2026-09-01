@@ -20,6 +20,7 @@ class FinalDeadReckoningConfig:
     v0_m_s: float = 10.0
     fixed_switch_threshold_sec: float = 30.0
     fusion_mode: str = "adaptive_switch"  # 'adaptive_switch', 'fixed_switch', 'm5_1_only', 'm9_1_only'
+    yaw_scale_factor: float = 0.95  # Default V2 candidate dynamic yaw scale factor (1.0 = V1 baseline)
 
 class FinalNavigationSystem:
     """
@@ -51,7 +52,8 @@ class FinalNavigationSystem:
             mode=self.config.fusion_mode,
             t_switch_sec=self.config.fixed_switch_threshold_sec,
             k_base=self.config.k_base,
-            v0_m_s=self.config.v0_m_s
+            v0_m_s=self.config.v0_m_s,
+            yaw_scale_factor=self.config.yaw_scale_factor
         )
 
         return res
