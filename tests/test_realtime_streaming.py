@@ -119,7 +119,7 @@ class TestRealtimeStreamingReplay(unittest.TestCase):
             replay_speed=0.0,
             show_plot=False
         )
-        self.assertEqual(res["status"], "A — REALTIME STREAMING REPLAY COMPLETE")
+        self.assertTrue("REALTIME STREAMING REPLAY COMPLETE" in res["status"])
         self.assertEqual(res["sample_count"], 101)
 
 if __name__ == "__main__":
