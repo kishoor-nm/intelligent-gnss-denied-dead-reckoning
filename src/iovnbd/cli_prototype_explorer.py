@@ -178,11 +178,11 @@ class PrototypeExplorerDashboard:
 
         sensor_text = (
             f"Sample #{pt.index:04d} | t = {t_elapsed:5.1f}s | Rate: 10 Hz\n\n"
-            f"🚗 CAN Speed:     {sample.indicated_speed_m_s:5.1f} m/s  [{'█'*int(spd_pct*10):<10s}]\n"
-            f"↗  Long Accel:    {sample.longitudinal_accel_m_s2:5.2f} m/s²\n"
-            f"↔  Lat Accel:     {sample.lateral_accel_m_s2:5.2f} m/s²\n"
-            f"🔄 CAN Yaw Rate:   {sample.yaw_rate_rad_s:5.2f} rad/s[{'█'*int(yaw_pct*10):<10s}]\n"
-            f"📱 Phone Roll Rate:{sample.roll_rate_rad_s:5.2f} rad/s[{'█'*int(roll_pct*10):<10s}]"
+            f"[CAR]   CAN Speed:     {sample.indicated_speed_m_s:5.1f} m/s  [{'='*int(spd_pct*10):<10s}]\n"
+            f"[LONG]  Long Accel:    {sample.longitudinal_accel_m_s2:5.2f} m/s^2\n"
+            f"[LAT]   Lat Accel:     {sample.lateral_accel_m_s2:5.2f} m/s^2\n"
+            f"[YAW]   CAN Yaw Rate:   {sample.yaw_rate_rad_s:5.2f} rad/s[{'='*int(yaw_pct*10):<10s}]\n"
+            f"[PHONE] Phone Roll Rate:{sample.roll_rate_rad_s:5.2f} rad/s[{'='*int(roll_pct*10):<10s}]"
         )
         self.ax_sensors.text(0.05, 0.5, sensor_text, color='#00e5ff', fontsize=10, fontfamily='monospace', va='center')
 
@@ -195,14 +195,14 @@ class PrototypeExplorerDashboard:
         self.ax_gnss.axis('off')
 
         gnss_text = (
-            "STATUS: 🔴 GNSS OUTAGE ACTIVE\n\n"
+            "STATUS: [OFFLINE] GNSS OUTAGE ACTIVE\n\n"
             f"Outage Start:   t = 100.0 s\n"
             f"Elapsed Time:   {t_elapsed:5.1f} s\n\n"
             "MASKING PROVENANCE:\n"
-            "• Latitude:  [ MASKED 🚫 ]\n"
-            "• Longitude: [ MASKED 🚫 ]\n"
-            "• GNSS Vel:  [ MASKED 🚫 ]\n\n"
-            "🔒 Zero Leakage Verified!"
+            "• Latitude:  [ MASKED X ]\n"
+            "• Longitude: [ MASKED X ]\n"
+            "• GNSS Vel:  [ MASKED X ]\n\n"
+            "[LOCK] Zero Leakage Verified!"
         )
         self.ax_gnss.text(0.05, 0.5, gnss_text, color='#ff0055', fontsize=10, fontfamily='monospace', va='center')
 
@@ -214,8 +214,8 @@ class PrototypeExplorerDashboard:
         self.ax_flow.set_title("SECTION C — PIPELINE FLOW & REGIME", fontsize=10, color='#e6edf3', fontweight='bold')
         self.ax_flow.axis('off')
 
-        m5_status = "🟢 ACTIVE" if pt.active_estimator == "M5.1" else "⚪ INACTIVE"
-        m9_status = "🟢 ACTIVE" if pt.active_estimator == "M9.1" else "⚪ INACTIVE"
+        m5_status = "[ACTIVE]" if pt.active_estimator == "M5.1" else "[IDLE]"
+        m9_status = "[ACTIVE]" if pt.active_estimator == "M9.1" else "[IDLE]"
         m5_col = "#39ff14" if pt.active_estimator == "M5.1" else "#8b949e"
         m9_col = "#39ff14" if pt.active_estimator == "M9.1" else "#8b949e"
 
@@ -223,9 +223,9 @@ class PrototypeExplorerDashboard:
             "PIPELINE REGIME EXECUTION:\n\n"
             f"1. Sensor Ingestion @ 10Hz   [ OK ]\n"
             f"2. GNSS Masking Barrier      [ MASKED ]\n"
-            f"3. M5.1 5D EKF ({m5_status:<9s})  <-- [{m5_col}]\n"
+            f"3. M5.1 5D EKF ({m5_status:<8s})  <-- [{m5_col}]\n"
             f"4. Adaptive Switch Evaluator [ CHECKING ]\n"
-            f"5. M9.1 6D Roll EKF ({m9_status:<9s}) <-- [{m9_col}]\n\n"
+            f"5. M9.1 6D Roll EKF ({m9_status:<8s}) <-- [{m9_col}]\n\n"
             f"Active Regime: [{pt.active_estimator}]"
         )
         self.ax_flow.text(0.05, 0.5, flow_text, color='#e6edf3', fontsize=10, fontfamily='monospace', va='center')
@@ -240,7 +240,7 @@ class PrototypeExplorerDashboard:
 
         if pt.active_estimator == "M5.1":
             think_msg = (
-                "🧠 SYSTEM THINKING (M5.1 Mode):\n\n"
+                "[THINKING] SYSTEM THINKING (M5.1 Mode):\n\n"
                 "\"GNSS is unavailable. I am estimating\n"
                 "vehicle motion using CAN wheel speed\n"
                 "and yaw rate. Flat 2D assumption is\n"
@@ -249,7 +249,7 @@ class PrototypeExplorerDashboard:
             col_think = "#00e5ff"
         else:
             think_msg = (
-                "🧠 SYSTEM THINKING (M9.1 Roll Mode):\n\n"
+                "[THINKING] SYSTEM THINKING (M9.1 Roll Mode):\n\n"
                 "\"Extended outage / turning detected!\n"
                 "Chassis roll tilt gravity leakage is\n"
                 "now active. Incorporating smartphone\n"

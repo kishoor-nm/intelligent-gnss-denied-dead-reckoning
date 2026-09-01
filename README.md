@@ -108,19 +108,28 @@ flowchart TD
 
 ---
 
-## 📊 Verified Demonstration Performance
+## 📊 Verified Version 1 Baseline Performance
 
 *Evaluated on canonical IO-VNBD S1 test sequence ($t_0 = 100.0\text{s}$):*
 
-| Outage Duration | M5.1 Baseline RMSE | M9.3 Fused Prototype RMSE | RMSE Improvement over Baseline | Final Position Error (t_end) |
-| :---: | :---: | :---: | :---: | :---: |
-| **10 seconds** | 3.19 m | **3.16 m** | **+0.9%** | 6.77 m |
-| **30 seconds** | 22.48 m | **22.28 m** | **+0.9%** | 47.06 m |
-| **60 seconds** | 86.25 m | **73.20 m** | **+15.1%** | 128.40 m |
-| **120 seconds** | 148.57 m | **88.76 m** | **+40.3%** | 142.60 m |
+| Outage Duration | Real-Time Replay RMSE | Final Position Error ($t_{\text{end}}$) | Primary Error Component |
+| :---: | :---: | :---: | :---: |
+| **10 seconds** | **3.07 m** | **6.77 m** | Heading alignment ($\delta\psi < 0.5^\circ$) |
+| **30 seconds** | **21.60 m** | **43.83 m** | Accumulated lateral gyro bias drift |
 
 > [!NOTE]
-> **Engineering Honesty Note**: Measurable position drift accumulates over time without GNSS absolute position feedback. The system demonstrates strong error reduction over flat dead reckoning, but accuracy degrades over multi-minute outages as expected in pure inertial navigation.
+> **Known Limitations & Baseline Audit Note**: 
+> In pure open-loop inertial dead reckoning without GNSS position feedback, position error accumulates quadratically over duration ($\text{Error} \propto v \cdot \delta\psi \cdot t$). For the 30-second outage over 340 meters of westward vehicle travel, a small uncorrected gyroscope bias ($\approx 1.5^\circ - 3^\circ$) results in a lateral North position error of $43.83\text{ meters}$ at $t=30\text{s}$.
+
+---
+
+## 🔮 Future Work (Version 2 Roadmap)
+
+Future work beyond the Version 1 baseline will focus on:
+1. **Heading & Gyroscope Bias Reduction**: Online bias estimation and Zero-Velocity Updates (ZUPT) during stationary windows.
+2. **Kinematic Zero-Side-Slip Constraints**: Tighter Non-Holonomic Constraints (NHC) integration during straight-line driving segments.
+3. **Multi-Sequence Cross Validation**: Benchmarking across additional IO-VNBD sequences (S2-S5) and varying speed regimes.
+
 
 ---
 
