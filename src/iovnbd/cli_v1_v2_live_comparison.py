@@ -1,9 +1,9 @@
 """
 SIH 2026 Problem Statement 168: Intelligent Dead Reckoning Prototype
-V2.0 Live Navigation Demonstration CLI with Dual V1 vs V2 Live Moving Dots.
+V1 Baseline vs V2 Production LIVE COMPARISON DEMONSTRATION CLI.
 
-Reads CSV streams and executes production V1 and V2 StreamingNavigationRunners sample-by-sample (10 Hz).
-Visualizes live 2D trajectory development with moving dots, adaptive M5.1 -> M9.1 switching, and telemetry panel.
+Executes both V1 (yaw_scale_factor=1.0) and V2 (yaw_scale_factor=0.95) estimators side-by-side
+sample-by-sample in real time (10 Hz nominal pacing), displaying dual live moving dots on the 2D graph.
 """
 
 import os
@@ -11,7 +11,7 @@ import sys
 import time
 import argparse
 import copy
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 
 import pandas as pd
 import numpy as np
@@ -27,28 +27,29 @@ from src.iovnbd.navigation.csv_replay_streamer import CSVReplayStreamer
 from src.iovnbd.navigation.streaming_runner import StreamingNavigationRunner
 from src.iovnbd.navigation.coordinate_frame import geodetic_to_enu
 
-def run_v2_live_demo(
+def run_v1_v2_live_comparison(
     vehicle_csv: str = "data/processed/S1/V-S1_processed.csv",
     smartphone_csv: str = "data/processed/S1/S-S1_processed.csv",
-    output_dir: str = "results/v2_live_demo",
+    output_dir: str = "results/v1_v2_live_comparison",
     start_idx: int = 1000,
     outage_duration_sec: float = 30.0,
     replay_speed: float = 1.0,
     show_gui: bool = True
 ) -> Dict[str, Any]:
     """
-    Runs the V2 Live Navigation Demonstration with Dual V1/V2 Live Moving Dots.
+    Runs the V1 vs V2 Dual Live Moving Point Trajectory Demonstration.
     """
     os.makedirs(output_dir, exist_ok=True)
 
     print("=" * 85)
     print("      SIH 2026 PROBLEM STATEMENT 168 — INTELLIGENT DEAD RECKONING PROTOTYPE")
-    print("         VERSION 1 BASELINE vs VERSION 2 PRODUCTION LIVE DEMONSTRATION")
+    print("           VERSION 1 BASELINE vs VERSION 2 PRODUCTION LIVE DEMONSTRATION")
     print("=" * 85)
-    print("\n  MODE:                   SOFTWARE-IN-THE-LOOP (SIL) DATASET REPLAY DEMONSTRATION")
-    print(f"  REPLAY PACING:          {replay_speed:.1f}x Real-Time Pacing ({'Maximum Speed' if replay_speed == 0.0 else f'{10.0*replay_speed:.0f} Hz'})")
-    print("  GNSS PROVENANCE:        GNSS POSITION & VELOCITY STRICTLY MASKED FROM ESTIMATOR")
-    print("  ESTIMATOR SETTINGS:     V2 Production Baseline (yaw_scale_factor = 0.95, Lateral NHC Active)\n")
+    print("\n  MODE:                   SOFTWARE-IN-THE-LOOP (SIL) DUAL REAL-TIME REPLAY")
+    print(f"  REPLAY PACING:          {replay_speed:.1f}x Pacing ({'Maximum Speed' if replay_speed == 0.0 else f'{10.0*replay_speed:.0f} Hz'})")
+    print("  GNSS PROVENANCE:        GNSS DATA STRICTLY MASKED DURING OUTAGE INFERENCE")
+    print("  V1 BASELINE:            yaw_scale_factor = 1.0 (Baseline Uncalibrated)")
+    print("  V2 PRODUCTION:          yaw_scale_factor = 0.95 + Lateral NHC Active\n")
 
     if not os.path.exists(vehicle_csv):
         raise FileNotFoundError(f"Vehicle CSV missing: {vehicle_csv}")
@@ -68,7 +69,7 @@ def run_v2_live_demo(
     origin = init_state.origin
     t0 = init_state.t_rel_sec
 
-    # Extract VBOX reference path ONLY for offline post-hoc scoring and visualization
+    # Extract VBOX reference trajectory for OFFLINE SCORING & PLOTTING ONLY
     ref_slice = df_v.iloc[start_idx:start_idx + n_samples]
     ref_e, ref_n = [], []
     for _, row in ref_slice.iterrows():
@@ -93,6 +94,7 @@ def run_v2_live_demo(
     runner_v1 = StreamingNavigationRunner(initial_state=init_state, mode="adaptive_switch", yaw_scale_factor=1.0)
     runner_v2 = StreamingNavigationRunner(initial_state=init_state, mode="adaptive_switch", yaw_scale_factor=0.95)
 
+    # Initialize Matplotlib Interactive Window if GUI enabled
     if show_gui:
         try:
             plt.ion()
@@ -111,16 +113,18 @@ def run_v2_live_demo(
             spine.set_color('#30363d')
 
     # Configure Main Trajectory Map
-    ax_map.set_title("V1 VS V2 LIVE NAVIGATION TRAJECTORY (ENU FRAME)", color='#e6edf3', fontweight='bold', fontsize=12, pad=10)
-    ax_map.plot(ref_e, ref_n, color='#8b949e', linestyle='--', linewidth=2.0, label='VBOX Ref (Post-Hoc Scoring ONLY)')
-    ax_map.scatter(0, 0, color='#38d9a9', s=140, label='GNSS Outage Start (t=100.0s)', zorder=6)
+    ax_map.set_title("SIH 2026 PS-168: V1 VS V2 LIVE DUAL NAVIGATION MAP", color='#e6edf3', fontweight='bold', fontsize=12, pad=10)
+    ax_map.plot(ref_e, ref_n, color='#8b949e', linestyle='--', linewidth=2.0, label='VBOX Ground Truth (Offline Scoring Only)')
+    ax_map.scatter(0, 0, color='#38d9a9', s=140, label='GNSS Outage Barrier (t=100.0s)', zorder=6)
 
+    # Live Trajectory Lines
     line_v1, = ax_map.plot([], [], color='#ff6b6b', linewidth=2.2, linestyle='-.', label='V1 Baseline Path (Yaw Scale=1.0)')
-    line_v2, = ax_map.plot([], [], color='#4dabf7', linewidth=3.0, linestyle='-', label='V2 Production Path (Yaw Scale=0.95)')
+    line_v2, = ax_map.plot([], [], color='#4dabf7', linewidth=3.0, linestyle='-', label='V2 Production Path (Yaw Scale=0.95 + NHC)')
 
-    pt_v1_cur = ax_map.scatter([], [], color='#ff6b6b', s=120, edgecolors='white', zorder=7, label='V1 Current Position')
-    pt_v2_cur = ax_map.scatter([], [], color='#ffd43b', s=160, edgecolors='black', zorder=8, label='V2 Current Position')
-    pt_switch_map = ax_map.scatter([], [], color='#ff922b', s=160, marker='*', zorder=9, label='M5.1 -> M9.1 Adaptive Switch')
+    # Live Moving Position Dots
+    pt_v1_cur = ax_map.scatter([], [], color='#ff6b6b', s=120, edgecolors='white', zorder=7, label='V1 Moving Position Dot')
+    pt_v2_cur = ax_map.scatter([], [], color='#ffd43b', s=160, edgecolors='black', zorder=8, label='V2 Moving Position Dot')
+    pt_switch = ax_map.scatter([], [], color='#ff922b', s=160, marker='*', zorder=9, label='M5.1 -> M9.1 Adaptive Switch')
 
     ax_map.set_xlabel("East Position (meters)", color='#8b949e')
     ax_map.set_ylabel("North Position (meters)", color='#8b949e')
@@ -136,7 +140,7 @@ def run_v2_live_demo(
         pass
 
     print("-" * 75)
-    print("                STARTING V2 LIVE DEMONSTRATION REPLAY")
+    print("         STARTING DUAL V1 VS V2 LIVE MOVING-POINT REPLAY")
     print("-" * 75)
 
     v1_e_hist, v1_n_hist, v1_err_hist = [], [], []
@@ -177,7 +181,7 @@ def run_v2_live_demo(
             switch_n.append(pt_v2.north_m)
             switch_t.append(t_elapsed)
 
-        # Update Live 2D Map & Moving Dots
+        # Update Live 2D Trajectory Graph & Moving Dots
         if curr_idx % 2 == 0 or curr_idx == n_samples - 1 or pt_v2.switch_event:
             line_v1.set_data(v1_e_hist, v1_n_hist)
             line_v2.set_data(v2_e_hist, v2_n_hist)
@@ -186,41 +190,42 @@ def run_v2_live_demo(
             pt_v2_cur.set_offsets(np.c_[[pt_v2.east_m], [pt_v2.north_m]])
 
             if len(switch_e) > 0:
-                pt_switch_map.set_offsets(np.c_[switch_e, switch_n])
+                pt_switch.set_offsets(np.c_[switch_e, switch_n])
 
             # Update Telemetry Panel
             ax_status.clear()
             ax_status.set_facecolor('#161b22')
             ax_status.axis('off')
-            ax_status.set_title("V2 LIVE NAVIGATION TELEMETRY", color='#e6edf3', fontweight='bold', fontsize=12, pad=10)
+            ax_status.set_title("V1 VS V2 LIVE TELEMETRY DASHBOARD", color='#e6edf3', fontweight='bold', fontsize=12, pad=10)
 
             sw_msg = f"ADAPTIVE SWITCH M5.1 -> M9.1 (t={switch_t[-1]:.1f}s)" if len(switch_t) > 0 else "Normal Propagation"
             imprv_curr = ((err_v1 - err_v2) / max(0.01, err_v1)) * 100.0
 
             status_box = (
                 "─────────────────────────────────────────\n"
-                "  V2 LIVE NAVIGATION STATUS\n"
+                "  REAL-TIME REPLAY STATUS\n"
                 "─────────────────────────────────────────\n"
                 f"  Replay Speed:       {replay_speed:.1f}x Pacing\n"
-                f"  Replay Time:        t = {t_elapsed:5.2f} s / {outage_duration_sec:.1f} s\n"
-                f"  Outage Time:        t = {100.0 + t_elapsed:5.1f} s\n\n"
-                f"  Active Estimator:   [{pt_v2.active_estimator:4s}]\n"
+                f"  Outage Elapsed:     t = {t_elapsed:5.2f} s / {outage_duration_sec:.1f} s\n"
+                f"  Sample Payload:     #{curr_idx+1:03d} / {n_samples}\n\n"
+                f"  Active Regime:      [{pt_v2.active_estimator:4s}]\n"
                 f"  Estimator Event:    {sw_msg}\n\n"
+                "─────────────────────────────────────────\n"
+                "  LIVE SENSOR & DYNAMICS READOUT\n"
+                "─────────────────────────────────────────\n"
                 f"  Vehicle Speed:      {pt_v2.velocity_m_s:5.2f} m/s ({pt_v2.velocity_m_s*3.6:5.1f} km/h)\n"
-                f"  Vehicle Heading:    {pt_v2.heading_deg:5.1f}°\n"
-                f"  Vehicle Roll:       {pt_v2.roll_deg:5.2f}°\n\n"
-                f"  East Position:      {pt_v2.east_m:6.2f} m\n"
-                f"  North Position:     {pt_v2.north_m:6.2f} m\n\n"
-                f"  V1 Position Error:  {err_v1:5.2f} m\n"
-                f"  V2 Position Error:  {err_v2:5.2f} m\n"
-                f"  V2 Running RMSE:    {running_rmse_v2:5.2f} m\n"
-                f"  Live Error Gain:    {imprv_curr:+6.1f}% Reduction\n\n"
+                f"  V2 Heading:         {pt_v2.heading_deg:5.1f}°\n"
+                f"  V2 Roll Angle:      {pt_v2.roll_deg:5.2f}°\n\n"
                 "─────────────────────────────────────────\n"
-                "  SYSTEM CONFIGURATION & SAFETY\n"
+                "  LIVE COMPARISON (V1 BASELINE VS V2 PROTOTYPE)\n"
                 "─────────────────────────────────────────\n"
-                "  Yaw Scale Factor:   0.95\n"
-                "  GNSS Status:        MASKED (Zero Data Leakage)\n"
-                "  NHC Status:         ACTIVE (Zero Lateral Slip)\n"
+                f"  🔴 V1 Position:      E={pt_v1.east_m:6.2f}m, N={pt_v1.north_m:6.2f}m\n"
+                f"  🟡 V2 Position:      E={pt_v2.east_m:6.2f}m, N={pt_v2.north_m:6.2f}m\n\n"
+                f"  • V1 Pos Error:     {err_v1:5.2f} meters\n"
+                f"  • V2 Pos Error:     {err_v2:5.2f} meters\n"
+                f"  • V1 Running RMSE:  {running_rmse_v1:5.2f} meters\n"
+                f"  • V2 Running RMSE:  {running_rmse_v2:5.2f} meters\n"
+                f"  • Live Error Gain:  {imprv_curr:+6.1f}% Reduction\n"
                 "─────────────────────────────────────────"
             )
             ax_status.text(0.05, 0.5, status_box, color='#e6edf3', fontsize=9.2, fontfamily='monospace', va='center')
@@ -235,70 +240,71 @@ def run_v2_live_demo(
 
         if (runner_v2.sample_count % 10 == 0) or pt_v2.switch_event or runner_v2.sample_count == n_samples:
             sw_str = " *** ADAPTIVE SWITCH M5.1 -> M9.1 ***" if pt_v2.switch_event else ""
-            print(f"  t = {t_elapsed:5.1f}s | Active Estimator: [{pt_v2.active_estimator:4s}] | Speed: {pt_v2.velocity_m_s:5.2f}m/s | Heading: {pt_v2.heading_deg:5.1f}° | V1 Err: {err_v1:5.2f}m | V2 Err: {err_v2:5.2f}m ({imprv_curr:+.1f}%){sw_str}")
+            print(f"  t = {t_elapsed:5.1f}s | Regime: [{pt_v2.active_estimator:4s}] | Speed: {pt_v2.velocity_m_s:5.2f}m/s | V1 Err: {err_v1:5.2f}m | V2 Err: {err_v2:5.2f}m ({imprv_curr:+.1f}%){sw_str}")
 
-    # Final Summary Calculation
-    final_rmse_v1 = np.sqrt(np.mean(np.square(v1_err_hist)))
-    final_rmse_v2 = np.sqrt(np.mean(np.square(v2_err_hist)))
-    final_pos_err_v1 = v1_err_hist[-1]
-    final_pos_err_v2 = v2_err_hist[-1]
-    max_pos_err_v2 = np.max(v2_err_hist)
-    imprv_rmse = ((final_rmse_v1 - final_rmse_v2) / final_rmse_v1) * 100.0
+    # Final Benchmark KPI Summary
+    rmse_v1 = np.sqrt(np.mean(np.square(v1_err_hist)))
+    rmse_v2 = np.sqrt(np.mean(np.square(v2_err_hist)))
+    final_err_v1 = v1_err_hist[-1]
+    final_err_v2 = v2_err_hist[-1]
+    imprv_rmse = ((rmse_v1 - rmse_v2) / rmse_v1) * 100.0
+    imprv_final = ((final_err_v1 - final_err_v2) / final_err_v1) * 100.0
 
     print("-" * 75)
-    print("           V2 LIVE NAVIGATION DEMONSTRATION COMPLETE")
+    print("           DUAL V1 VS V2 LIVE NAVIGATION REPLAY COMPLETE")
     print("-" * 75)
 
     summary_banner = (
         "============================================================\n"
-        "         V2 LIVE NAVIGATION DEMONSTRATION COMPLETE\n"
+        "       V1 BASELINE VS V2 PRODUCTION PERFORMANCE SUMMARY\n"
         "============================================================\n"
-        f"  Outage Duration:          {outage_duration_sec:.1f} s\n"
-        f"  Samples Processed:        {runner_v2.sample_count}\n"
-        f"  V1 Baseline RMSE:         {final_rmse_v1:6.2f} m\n"
-        f"  V2 Production RMSE:       {final_rmse_v2:6.2f} m (Gain: {imprv_rmse:+.1f}%)\n"
-        f"  V1 Final Position Error:   {final_pos_err_v1:6.2f} m\n"
-        f"  V2 Final Position Error:   {final_pos_err_v2:6.2f} m\n"
-        f"  V2 Maximum Position Error: {max_pos_err_v2:6.2f} m\n\n"
-        "  V2 Configuration:\n"
-        "  Yaw Scale Factor:         0.95\n"
-        "  NHC:                      Enabled\n"
-        "  Adaptive Estimator:       M5.1 -> M9.1\n\n"
-        "  GNSS Leakage:\n"
-        "  During outage:            STRICTLY MASKED\n"
+        f"  Outage Duration:            {outage_duration_sec:.1f} s ({runner_v2.sample_count} samples)\n\n"
+        "  ACCURACY EVALUATION:\n"
+        f"  • V1 Baseline RMSE:         {rmse_v1:6.2f} meters\n"
+        f"  • V2 Production RMSE:       {rmse_v2:6.2f} meters\n"
+        f"  • RMSE IMPROVEMENT:        {imprv_rmse:+6.1f}%\n\n"
+        f"  • V1 Final Position Error:  {final_err_v1:6.2f} meters\n"
+        f"  • V2 Final Position Error:  {final_err_v2:6.2f} meters\n"
+        f"  • FINAL ERROR REDUCTION:    {imprv_final:+6.1f}%\n\n"
+        "  CONFIGURATION PROVENANCE:\n"
+        "  V1 Settings:                yaw_scale = 1.0 (Uncalibrated)\n"
+        "  V2 Settings:                yaw_scale = 0.95 + Lateral NHC\n"
+        "  GNSS Outage Masking:        STRICTLY ENFORCED (Zero Data Leakage)\n"
         "============================================================"
     )
     print(summary_banner)
 
-    # Save Final Visualization Snapshot
+    # Save Final Visual Plot Snapshot
     plt.tight_layout()
-    plot_path = os.path.join(output_dir, "v2_live_navigation.png")
+    plot_path = os.path.join(output_dir, "v1_vs_v2_live_trajectory.png")
     plt.savefig(plot_path, dpi=150)
     plt.close()
 
-    print(f"\n[OUTPUT SAVED] Final live demonstration plot saved to '{plot_path}'\n")
+    print(f"\n[OUTPUT SAVED] Final dual live comparison trajectory saved to '{plot_path}'\n")
 
     return {
-        "status": "DEMO COMPLETE",
+        "status": "DUAL REPLAY COMPLETE",
         "samples_processed": runner_v2.sample_count,
-        "final_rmse": round(final_rmse_v2, 2),
-        "final_pos_err": round(final_pos_err_v2, 2),
-        "max_pos_err": round(max_pos_err_v2, 2),
+        "v1_rmse": round(rmse_v1, 2),
+        "v2_rmse": round(rmse_v2, 2),
+        "v1_final_err": round(final_err_v1, 2),
+        "v2_final_err": round(final_err_v2, 2),
+        "rmse_improvement_pct": round(imprv_rmse, 1),
         "plot_path": plot_path
     }
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="SIH 2026 PS-168 V2 Live Navigation Demo CLI")
+    parser = argparse.ArgumentParser(description="SIH 2026 PS-168 V1 vs V2 Live Comparison Demo CLI")
     parser.add_argument("--vehicle_csv", type=str, default="data/processed/S1/V-S1_processed.csv")
     parser.add_argument("--smartphone_csv", type=str, default="data/processed/S1/S-S1_processed.csv")
-    parser.add_argument("--output_dir", type=str, default="results/v2_live_demo")
+    parser.add_argument("--output_dir", type=str, default="results/v1_v2_live_comparison")
     parser.add_argument("--start_idx", type=int, default=1000)
     parser.add_argument("--duration", type=float, default=30.0)
     parser.add_argument("--replay_speed", type=float, default=1.0)
     parser.add_argument("--no_gui", action="store_true")
 
     args = parser.parse_args()
-    run_v2_live_demo(
+    run_v1_v2_live_comparison(
         vehicle_csv=args.vehicle_csv,
         smartphone_csv=args.smartphone_csv,
         output_dir=args.output_dir,
