@@ -11,7 +11,6 @@ from typing import Dict, Any, Optional
 import pandas as pd
 import numpy as np
 import matplotlib
-matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 from src.iovnbd.preprocessing.schema_validation import (
@@ -36,7 +35,7 @@ def run_realtime_replay_cli(
 ) -> Dict[str, Any]:
     """
     Executes the V2.1 Real-Time Dataset Replay Demonstration CLI.
-    Runs V1, V2.0, and V2.1 simultaneously sample-by-sample.
+    Runs V1, V2.0, and V2.1 simultaneously sample-by-sample with interactive live GUI support.
     """
     t_start_wall = time.time()
     os.makedirs(output_dir, exist_ok=True)
@@ -99,29 +98,64 @@ def run_realtime_replay_cli(
         replay_speed=replay_speed
     )
 
-    # V1 Baseline Runner (yaw_scale_factor = 1.0, dynamic_yaw_scale_enabled = False)
     runner_v1 = StreamingNavigationRunner(
-        initial_state=init_state,
-        mode="adaptive_switch",
-        yaw_scale_factor=1.0,
-        dynamic_yaw_scale_enabled=False
+        initial_state=init_state, mode="adaptive_switch", yaw_scale_factor=1.0, dynamic_yaw_scale_enabled=False
     )
-
-    # V2.0 Baseline Runner (yaw_scale_factor = 0.95, dynamic_yaw_scale_enabled = False)
     runner_v2_0 = StreamingNavigationRunner(
-        initial_state=init_state,
-        mode="adaptive_switch",
-        yaw_scale_factor=0.95,
-        dynamic_yaw_scale_enabled=False
+        initial_state=init_state, mode="adaptive_switch", yaw_scale_factor=0.95, dynamic_yaw_scale_enabled=False
+    )
+    runner_v2_1 = StreamingNavigationRunner(
+        initial_state=init_state, mode="adaptive_switch", yaw_scale_factor=0.90, dynamic_yaw_scale_enabled=True
     )
 
-    # V2.1 Production Runner (yaw_scale_factor = 0.90, dynamic_yaw_scale_enabled = True)
-    runner_v2_1 = StreamingNavigationRunner(
-        initial_state=init_state,
-        mode="adaptive_switch",
-        yaw_scale_factor=0.90,
-        dynamic_yaw_scale_enabled=True
-    )
+    # Setup Interactive Live Plot Window if requested
+    fig, ax_map, ax_err = None, None, None
+    line_v1, line_v20, line_v21 = None, None, None
+    marker_v1, marker_v20, marker_v21 = None, None, None
+    line_err_v1, line_err_v20, line_err_v21 = None, None, None
+
+    if show_plot:
+        try:
+            plt.ion()
+            fig = plt.figure(figsize=(14, 8), facecolor='#0e1117')
+            ax_map = plt.subplot(1, 2, 1, facecolor='#161b22')
+            ax_err = plt.subplot(1, 2, 2, facecolor='#161b22')
+
+            ax_map.plot(ref_e, ref_n, color='#8b949e', linestyle='--', linewidth=2.0, label='VBOX Reference (Post-Hoc Only)')
+            line_v1, = ax_map.plot([], [], color='#f85149', linestyle='-.', linewidth=2.0, label='V1 Baseline (Yaw Scale=1.0)')
+            line_v20, = ax_map.plot([], [], color='#58a6ff', linestyle='--', linewidth=2.2, label='V2.0 Baseline (Yaw Scale=0.95)')
+            line_v21, = ax_map.plot([], [], color='#3fb950', linestyle='-', linewidth=2.8, label='V2.1 Production (Dynamic Scale)')
+
+            ax_map.scatter(0, 0, color='#d29922', s=120, label='GNSS Outage Start t=100s (0,0)', zorder=6)
+            marker_v1 = ax_map.scatter([], [], color='#f85149', s=90, zorder=8)
+            marker_v20 = ax_map.scatter([], [], color='#58a6ff', s=90, zorder=8)
+            marker_v21 = ax_map.scatter([], [], color='#3fb950', s=130, edgecolors='white', zorder=9, label='Live V2.1 Position')
+
+            ax_map.set_title("V2.1 LIVE NAVIGATION TRAJECTORY MAP", color='white', fontweight='bold', fontsize=12)
+            ax_map.set_xlabel("East Position (meters)", color='#c9d1d9')
+            ax_map.set_ylabel("North Position (meters)", color='#c9d1d9')
+            ax_map.tick_params(colors='#c9d1d9')
+            ax_map.grid(True, linestyle=':', alpha=0.4, color='#30363d')
+            ax_map.legend(loc='best', facecolor='#161b22', edgecolor='#30363d', labelcolor='white', fontsize=9)
+            ax_map.axis('equal')
+
+            line_err_v1, = ax_err.plot([], [], color='#f85149', linestyle='-.', linewidth=2.0, label='V1 Error')
+            line_err_v20, = ax_err.plot([], [], color='#58a6ff', linestyle='--', linewidth=2.2, label='V2.0 Error')
+            line_err_v21, = ax_err.plot([], [], color='#3fb950', linestyle='-', linewidth=2.8, label='V2.1 Error')
+
+            ax_err.set_title("POSITION DRIFT ERROR PROGRESSION (m)", color='white', fontweight='bold', fontsize=12)
+            ax_err.set_xlabel("Elapsed Outage Time (seconds)", color='#c9d1d9')
+            ax_err.set_ylabel("Position Error (meters)", color='#c9d1d9')
+            ax_err.tick_params(colors='#c9d1d9')
+            ax_err.grid(True, linestyle=':', alpha=0.4, color='#30363d')
+            ax_err.legend(loc='best', facecolor='#161b22', edgecolor='#30363d', labelcolor='white', fontsize=9)
+
+            plt.suptitle("SIH 2026 PS-168 INTELLIGENT DEAD RECKONING PROTOTYPE — V2.1 LIVE DASHBOARD", color='white', fontweight='bold', fontsize=14, y=0.98)
+            plt.tight_layout(rect=[0, 0, 1, 0.95])
+            fig.canvas.draw()
+            plt.pause(0.01)
+        except Exception as e:
+            print(f"  -> Notice: Interactive GUI window non-interactive ({e}). Operating in background mode.")
 
     print("\n" + "-" * 75)
     print("                     STARTING REAL-TIME SENSOR STREAM REPLAY")
@@ -160,11 +194,37 @@ def run_realtime_replay_cli(
         v2_0_err_hist.append(err_v2_0)
         v2_1_err_hist.append(err_v2_1)
 
+        # Update Live Interactive Plots if active
+        if show_plot and fig is not None and line_v21 is not None:
+            try:
+                line_v1.set_data(v1_e_hist, v1_n_hist)
+                line_v20.set_data(v2_0_e_hist, v2_0_n_hist)
+                line_v21.set_data(v2_1_e_hist, v2_1_n_hist)
+
+                marker_v1.set_offsets([[v1_e_hist[-1], v1_n_hist[-1]]])
+                marker_v20.set_offsets([[v2_0_e_hist[-1], v2_0_n_hist[-1]]])
+                marker_v21.set_offsets([[v2_1_e_hist[-1], v2_1_n_hist[-1]]])
+
+                line_err_v1.set_data(t_rel_hist, v1_err_hist)
+                line_err_v20.set_data(t_rel_hist, v2_0_err_hist)
+                line_err_v21.set_data(t_rel_hist, v2_1_err_hist)
+
+                ax_map.relim()
+                ax_map.autoscale_view()
+                ax_err.relim()
+                ax_err.autoscale_view()
+
+                fig.canvas.draw_idle()
+                fig.canvas.flush_events()
+                if replay_speed > 0.0:
+                    plt.pause(0.001)
+            except Exception:
+                pass
+
         # Print periodic progress to console every 10 samples (1 second) or on switch
         if (runner_v2_1.sample_count % 10 == 0) or pt_v2_1.switch_event or runner_v2_1.sample_count == len(streamer):
             sw_str = " *** ADAPTIVE SWITCH TO M9.1 ***" if pt_v2_1.switch_event else ""
             imprv_v1 = ((err_v1 - err_v2_1) / err_v1 * 100.0) if err_v1 > 0 else 0.0
-            imprv_v20 = ((err_v2_0 - err_v2_1) / err_v2_0 * 100.0) if err_v2_0 > 0 else 0.0
             print(f"  t = {t_elapsed:5.1f}s | Mode: [{pt_v2_1.active_estimator:4s}] | Spd: {pt_v2_1.velocity_m_s:5.2f}m/s | Head: {pt_v2_1.heading_deg:5.1f}° | V1: {err_v1:5.2f}m | V2.0: {err_v2_0:5.2f}m | V2.1: {err_v2_1:5.2f}m (Gain: +{imprv_v1:.1f}% vs V1){sw_str}")
 
     print("-" * 75)
@@ -203,51 +263,51 @@ def run_realtime_replay_cli(
     print(f"  Total Wall Clock Runtime:          {total_wall:.2f} seconds")
     print("=" * 75)
 
-    # 6. Save Professional Automotive Dashboard Visualization Plot
-    plt.figure(figsize=(14, 8), facecolor='#0e1117')
-    ax_map = plt.subplot(1, 2, 1, facecolor='#161b22')
-    ax_err = plt.subplot(1, 2, 2, facecolor='#161b22')
+    # Save final static plot snapshot
+    if fig is None:
+        fig = plt.figure(figsize=(14, 8), facecolor='#0e1117')
+        ax_map = plt.subplot(1, 2, 1, facecolor='#161b22')
+        ax_err = plt.subplot(1, 2, 2, facecolor='#161b22')
 
-    # Trajectory Map (Left Side)
-    ax_map.plot(ref_e, ref_n, color='#8b949e', linestyle='--', linewidth=2.0, label='VBOX Reference (Post-Hoc Scoring Only)')
-    ax_map.plot(v1_e_hist, v1_n_hist, color='#f85149', linestyle='-.', linewidth=2.0, label=f'V1 Baseline (RMSE: {rmse_v1:.2f}m)')
-    ax_map.plot(v2_0_e_hist, v2_0_n_hist, color='#58a6ff', linestyle='--', linewidth=2.2, label=f'V2.0 Baseline (RMSE: {rmse_v2_0:.2f}m)')
-    ax_map.plot(v2_1_e_hist, v2_1_n_hist, color='#3fb950', linestyle='-', linewidth=2.8, label=f'V2.1 Production (RMSE: {rmse_v2_1:.2f}m)')
+        ax_map.plot(ref_e, ref_n, color='#8b949e', linestyle='--', linewidth=2.0, label='VBOX Reference (Post-Hoc Scoring Only)')
+        ax_map.plot(v1_e_hist, v1_n_hist, color='#f85149', linestyle='-.', linewidth=2.0, label=f'V1 Baseline (RMSE: {rmse_v1:.2f}m)')
+        ax_map.plot(v2_0_e_hist, v2_0_n_hist, color='#58a6ff', linestyle='--', linewidth=2.2, label=f'V2.0 Baseline (RMSE: {rmse_v2_0:.2f}m)')
+        ax_map.plot(v2_1_e_hist, v2_1_n_hist, color='#3fb950', linestyle='-', linewidth=2.8, label=f'V2.1 Production (RMSE: {rmse_v2_1:.2f}m)')
 
-    ax_map.scatter(0, 0, color='#d29922', s=120, label='GNSS Outage Start t=100s (0,0)', zorder=6)
-    if len(v2_1_e_hist) > 200:
-        ax_map.scatter(v2_1_e_hist[200], v2_1_n_hist[200], color='#a371f7', s=140, marker='*', label='M5.1 -> M9.1 Switch (t=20s)', zorder=7)
+        ax_map.scatter(0, 0, color='#d29922', s=120, label='GNSS Outage Start t=100s (0,0)', zorder=6)
+        if len(v2_1_e_hist) > 200:
+            ax_map.scatter(v2_1_e_hist[200], v2_1_n_hist[200], color='#a371f7', s=140, marker='*', label='M5.1 -> M9.1 Switch (t=20s)', zorder=7)
 
-    # Moving markers for final position
-    ax_map.scatter(v1_e_hist[-1], v1_n_hist[-1], color='#f85149', s=90, zorder=8)
-    ax_map.scatter(v2_0_e_hist[-1], v2_0_n_hist[-1], color='#58a6ff', s=90, zorder=8)
-    ax_map.scatter(v2_1_e_hist[-1], v2_1_n_hist[-1], color='#3fb950', s=130, edgecolors='white', zorder=9, label='Current V2.1 Position')
+        ax_map.scatter(v1_e_hist[-1], v1_n_hist[-1], color='#f85149', s=90, zorder=8)
+        ax_map.scatter(v2_0_e_hist[-1], v2_0_n_hist[-1], color='#58a6ff', s=90, zorder=8)
+        ax_map.scatter(v2_1_e_hist[-1], v2_1_n_hist[-1], color='#3fb950', s=130, edgecolors='white', zorder=9, label='Current V2.1 Position')
 
-    ax_map.set_title("V2.1 LIVE NAVIGATION TRAJECTORY MAP", color='white', fontweight='bold', fontsize=12)
-    ax_map.set_xlabel("East Position (meters)", color='#c9d1d9')
-    ax_map.set_ylabel("North Position (meters)", color='#c9d1d9')
-    ax_map.tick_params(colors='#c9d1d9')
-    ax_map.grid(True, linestyle=':', alpha=0.4, color='#30363d')
-    ax_map.legend(loc='best', facecolor='#161b22', edgecolor='#30363d', labelcolor='white', fontsize=9)
-    ax_map.axis('equal')
+        ax_map.set_title("V2.1 LIVE NAVIGATION TRAJECTORY MAP", color='white', fontweight='bold', fontsize=12)
+        ax_map.set_xlabel("East Position (meters)", color='#c9d1d9')
+        ax_map.set_ylabel("North Position (meters)", color='#c9d1d9')
+        ax_map.tick_params(colors='#c9d1d9')
+        ax_map.grid(True, linestyle=':', alpha=0.4, color='#30363d')
+        ax_map.legend(loc='best', facecolor='#161b22', edgecolor='#30363d', labelcolor='white', fontsize=9)
+        ax_map.axis('equal')
 
-    # Position Error Progression (Right Side)
-    ax_err.plot(t_rel_hist, v1_err_hist, color='#f85149', linestyle='-.', linewidth=2.0, label=f'V1 Error (Final: {final_err_v1:.2f}m)')
-    ax_err.plot(t_rel_hist, v2_0_err_hist, color='#58a6ff', linestyle='--', linewidth=2.2, label=f'V2.0 Error (Final: {final_err_v2_0:.2f}m)')
-    ax_err.plot(t_rel_hist, v2_1_err_hist, color='#3fb950', linestyle='-', linewidth=2.8, label=f'V2.1 Error (Final: {final_err_v2_1:.2f}m)')
+        ax_err.plot(t_rel_hist, v1_err_hist, color='#f85149', linestyle='-.', linewidth=2.0, label=f'V1 Error (Final: {final_err_v1:.2f}m)')
+        ax_err.plot(t_rel_hist, v2_0_err_hist, color='#58a6ff', linestyle='--', linewidth=2.2, label=f'V2.0 Error (Final: {final_err_v2_0:.2f}m)')
+        ax_err.plot(t_rel_hist, v2_1_err_hist, color='#3fb950', linestyle='-', linewidth=2.8, label=f'V2.1 Error (Final: {final_err_v2_1:.2f}m)')
 
-    ax_err.set_title(f"POSITION DRIFT GROWTH (V2.1 Gain: +{imprv_rmse_v20:.1f}% vs V2.0)", color='white', fontweight='bold', fontsize=12)
-    ax_err.set_xlabel("Elapsed Outage Time (seconds)", color='#c9d1d9')
-    ax_err.set_ylabel("Position Error (meters)", color='#c9d1d9')
-    ax_err.tick_params(colors='#c9d1d9')
-    ax_err.grid(True, linestyle=':', alpha=0.4, color='#30363d')
-    ax_err.legend(loc='best', facecolor='#161b22', edgecolor='#30363d', labelcolor='white', fontsize=9)
+        ax_err.set_title(f"POSITION DRIFT GROWTH (V2.1 Gain: +{imprv_rmse_v20:.1f}% vs V2.0)", color='white', fontweight='bold', fontsize=12)
+        ax_err.set_xlabel("Elapsed Outage Time (seconds)", color='#c9d1d9')
+        ax_err.set_ylabel("Position Error (meters)", color='#c9d1d9')
+        ax_err.tick_params(colors='#c9d1d9')
+        ax_err.grid(True, linestyle=':', alpha=0.4, color='#30363d')
+        ax_err.legend(loc='best', facecolor='#161b22', edgecolor='#30363d', labelcolor='white', fontsize=9)
 
-    plt.suptitle("SIH 2026 PS-168 INTELLIGENT DEAD RECKONING PROTOTYPE — V2.1 LIVE DASHBOARD", color='white', fontweight='bold', fontsize=14, y=0.98)
-    plt.tight_layout(rect=[0, 0, 1, 0.95])
+        plt.suptitle("SIH 2026 PS-168 INTELLIGENT DEAD RECKONING PROTOTYPE — V2.1 LIVE DASHBOARD", color='white', fontweight='bold', fontsize=14, y=0.98)
+        plt.tight_layout(rect=[0, 0, 1, 0.95])
 
     final_plot_path = os.path.join(output_dir, "realtime_replay_trajectory.png")
-    plt.savefig(final_plot_path, dpi=150, facecolor='#0e1117')
+    fig.savefig(final_plot_path, dpi=150, facecolor='#0e1117')
+    if show_plot:
+        plt.ioff()
     plt.close('all')
 
     print(f"\n[OUTPUT SAVED] Final live demonstration dashboard plot saved to '{final_plot_path}'\n")
