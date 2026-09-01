@@ -18,15 +18,7 @@ class TestV2LiveDemo(unittest.TestCase):
 
     def test_run_v2_live_demo_execution(self):
         """Verify run_v2_live_demo runs to completion at speed 0.0 and generates snapshot artifact."""
-        res = run_v2_live_demo(
-            vehicle_csv=self.vehicle_csv,
-            smartphone_csv=self.smartphone_csv,
-            output_dir=self.output_dir,
-            start_idx=1000,
-            outage_duration_sec=30.0,
-            replay_speed=0.0,
-            show_plot=False
-        )
+
 
         self.assertEqual(res["status"], "DEMO COMPLETE")
         self.assertEqual(res["samples_processed"], 301)
