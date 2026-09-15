@@ -194,32 +194,36 @@ def run_realtime_replay_cli(
         v2_0_err_hist.append(err_v2_0)
         v2_1_err_hist.append(err_v2_1)
 
-        # Update Live Interactive Plots if active
+        # Update Live Interactive Plots if active (Throttled for high-speed replay performance)
+        update_stride = 1 if replay_speed == 1.0 else (5 if replay_speed == 0.0 else 2)
         if show_plot and fig is not None and line_v21 is not None:
-            try:
-                line_v1.set_data(v1_e_hist, v1_n_hist)
-                line_v20.set_data(v2_0_e_hist, v2_0_n_hist)
-                line_v21.set_data(v2_1_e_hist, v2_1_n_hist)
+            if (len(v2_1_e_hist) % update_stride == 0) or (len(v2_1_e_hist) == len(streamer)):
+                try:
+                    line_v1.set_data(v1_e_hist, v1_n_hist)
+                    line_v20.set_data(v2_0_e_hist, v2_0_n_hist)
+                    line_v21.set_data(v2_1_e_hist, v2_1_n_hist)
 
-                marker_v1.set_offsets([[v1_e_hist[-1], v1_n_hist[-1]]])
-                marker_v20.set_offsets([[v2_0_e_hist[-1], v2_0_n_hist[-1]]])
-                marker_v21.set_offsets([[v2_1_e_hist[-1], v2_1_n_hist[-1]]])
+                    marker_v1.set_offsets([[v1_e_hist[-1], v1_n_hist[-1]]])
+                    marker_v20.set_offsets([[v2_0_e_hist[-1], v2_0_n_hist[-1]]])
+                    marker_v21.set_offsets([[v2_1_e_hist[-1], v2_1_n_hist[-1]]])
 
-                line_err_v1.set_data(t_rel_hist, v1_err_hist)
-                line_err_v20.set_data(t_rel_hist, v2_0_err_hist)
-                line_err_v21.set_data(t_rel_hist, v2_1_err_hist)
+                    line_err_v1.set_data(t_rel_hist, v1_err_hist)
+                    line_err_v20.set_data(t_rel_hist, v2_0_err_hist)
+                    line_err_v21.set_data(t_rel_hist, v2_1_err_hist)
 
-                ax_map.relim()
-                ax_map.autoscale_view()
-                ax_err.relim()
-                ax_err.autoscale_view()
+                    ax_map.relim()
+                    ax_map.autoscale_view()
+                    ax_err.relim()
+                    ax_err.autoscale_view()
 
-                fig.canvas.draw_idle()
-                fig.canvas.flush_events()
-                if replay_speed > 0.0:
-                    plt.pause(0.001)
-            except Exception:
-                pass
+                    fig.canvas.draw_idle()
+                    fig.canvas.flush_events()
+                    if replay_speed > 0.0:
+                        plt.pause(0.001 / replay_speed)
+                    else:
+                        plt.pause(0.0001)
+                except Exception:
+                    pass
 
         # Print periodic progress to console every 10 samples (1 second) or on switch
         if (runner_v2_1.sample_count % 10 == 0) or pt_v2_1.switch_event or runner_v2_1.sample_count == len(streamer):
